@@ -176,6 +176,14 @@ export interface CompositionConfig {
   totalDurationSeconds: number;
 }
 
+export interface RepoFileTypeProfile {
+  totalFiles: number;
+  jsFiles: number;
+  cssFiles: number;
+  testFiles: number;
+  otherFiles: number;
+}
+
 // ─── Final analysis result ───────────────────────────────────────────────────
 
 export interface AnalysisResult {
@@ -189,4 +197,17 @@ export interface AnalysisResult {
   healthScore: number;
   metrics: MetricDetail[];
   compositionConfig: CompositionConfig;
+  fileTypeProfile: RepoFileTypeProfile;
+}
+
+export interface GalleryRepoSummary {
+  repoId: string;
+  repoUrl: string;
+  owner: string;
+  repo: string;
+  analyzeCount: number;
+  lastHealthScore: number;
+  lastTempo: number;
+  lastMode: 'major' | 'minor';
+  lastAnalyzedAt: string;
 }

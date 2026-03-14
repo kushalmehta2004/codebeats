@@ -16,6 +16,19 @@ export const config = {
     password: process.env.REDIS_PASSWORD || undefined,
   },
 
+  pythonService: {
+    baseUrl: process.env.PYTHON_SERVICE_URL || 'http://localhost:5000',
+    timeoutMs: parseInt(process.env.PYTHON_SERVICE_TIMEOUT_MS || '20000', 10),
+  },
+
+  postgres: {
+    host: process.env.POSTGRES_HOST || 'localhost',
+    port: parseInt(process.env.POSTGRES_PORT || '5432', 10),
+    user: process.env.POSTGRES_USER || 'sonification',
+    password: process.env.POSTGRES_PASSWORD || 'sonification_dev',
+    database: process.env.POSTGRES_DB || 'sonification',
+  },
+
   cache: {
     /** 24 hours in seconds */
     ttl: 86_400,

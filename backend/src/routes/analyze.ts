@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { fetchRepoFiles } from '../services/fileFetcher';
-import { getRepoInfo, getClosedPRs } from '../services/githubClient';
+import { getRepoInfo, getClosedPRs, getRepoTree } from '../services/githubClient';
 import {
   extractFileMetrics,
   computeDeadCodeRatio,
@@ -9,13 +9,15 @@ import {
   aggregateFileMetrics,
 } from '../services/metricExtractor';
 import { analyzeCommits, computeAvgPRReviewTimeHours } from '../services/commitAnalyzer';
+import { analyzePythonFiles } from '../services/pythonAnalyzer';
 import {
   normalizeMetrics,
   computeHealthScore,
   buildMetricDetails,
   buildCompositionConfig,
 } from '../services/metricNormalizer';
-import type { AnalysisResult, RawMetrics } from '../types';
+import type { AnalysisResult, GitHubTreeItem, RawMetrics, RepoFileTypeProfile } from '../types';
+import { recordAnalysisRun } from '../services/galleryStore';
 
 export const analyzeRouter = Router();
 
@@ -51,18 +53,31 @@ function parseGitHubUrl(raw: string): { owner: string; repo: string } | null {
 async function analyzeRepository(owner: string, repo: string): Promise<AnalysisResult> {
   console.log(`[analyze] Starting analysis for ${owner}/${repo}`);
 
-  // Run independent API calls concurrently
-  const [repoInfo, files, commitAnalysis, closedPRs] = await Promise.all([
-    getRepoInfo(owner, repo),
+  const repoInfo = await getRepoInfo(owner, repo);
+
+  // Run remaining calls concurrently once default branch is known
+  const [files, commitAnalysis, closedPRs, repoTree] = await Promise.all([
     fetchRepoFiles(owner, repo),
     analyzeCommits(owner, repo),
     getClosedPRs(owner, repo),
+    getRepoTree(owner, repo, repoInfo.defaultBranch),
   ]);
 
+  const fileTypeProfile = buildFileTypeProfile(repoTree.tree);
+
   // ── Per-file metric extraction ─────────────────────────────────────────────
-  // Skip TypeScript declaration files produced by compilers
-  const parsableFiles = files.filter((f) => !f.path.endsWith('.d.ts'));
-  const fileMetrics = parsableFiles.map((f) => extractFileMetrics(f));
+  const jsTsFiles = files.filter(
+    (f) => /\.(js|jsx|ts|tsx|mjs|cjs)$/i.test(f.path) && !f.path.endsWith('.d.ts'),
+  );
+  const pythonFiles = files.filter((f) => /\.py$/i.test(f.path));
+
+  const [pythonMetrics] = await Promise.all([
+    analyzePythonFiles(pythonFiles),
+  ]);
+
+  const jsMetrics = jsTsFiles.map((f) => extractFileMetrics(f));
+  const fileMetrics = [...jsMetrics, ...pythonMetrics];
+  const parsableFiles = [...jsTsFiles, ...pythonFiles];
 
   const parseErrors = fileMetrics.filter((m) => m.parseError).length;
   if (parseErrors > 0) {
@@ -115,6 +130,45 @@ async function analyzeRepository(owner: string, repo: string): Promise<AnalysisR
     healthScore,
     metrics,
     compositionConfig,
+    fileTypeProfile,
+  };
+}
+
+function buildFileTypeProfile(treeItems: GitHubTreeItem[]): RepoFileTypeProfile {
+  const blobs = treeItems.filter((item) => item.type === 'blob');
+
+  const jsOrTsRe = /\.(js|jsx|ts|tsx|mjs|cjs)$/i;
+  const cssRe = /\.(css|scss|sass|less)$/i;
+  const testRe = /(^|\/)(test|tests|__tests__)\/|\.(test|spec)\.(js|jsx|ts|tsx)$/i;
+
+  let jsFiles = 0;
+  let cssFiles = 0;
+  let testFiles = 0;
+
+  for (const item of blobs) {
+    const path = item.path.toLowerCase();
+    if (testRe.test(path)) {
+      testFiles += 1;
+      continue;
+    }
+    if (cssRe.test(path)) {
+      cssFiles += 1;
+      continue;
+    }
+    if (jsOrTsRe.test(path)) {
+      jsFiles += 1;
+    }
+  }
+
+  const totalFiles = blobs.length;
+  const categorized = jsFiles + cssFiles + testFiles;
+
+  return {
+    totalFiles,
+    jsFiles,
+    cssFiles,
+    testFiles,
+    otherFiles: Math.max(0, totalFiles - categorized),
   };
 }
 
@@ -146,6 +200,7 @@ analyzeRouter.post('/', async (req: Request, res: Response) => {
 
   try {
     const result = await analyzeRepository(owner, repo);
+    await recordAnalysisRun(result);
     return res.json(result);
   } catch (err: any) {
     const status: number = err?.response?.status ?? 0;

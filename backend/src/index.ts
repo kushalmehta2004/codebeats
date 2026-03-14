@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config';
 import { analyzeRouter } from './routes/analyze';
+import { galleryRouter } from './routes/gallery';
+import { shareRouter } from './routes/share';
 
 const app = express();
 
@@ -25,6 +27,8 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api/analyze', analyzeRouter);
+app.use('/api/gallery', galleryRouter);
+app.use('/api/share', shareRouter);
 
 // 404 catch-all
 app.use((_req, res) => {

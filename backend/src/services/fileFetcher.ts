@@ -4,7 +4,7 @@ import type { ParsedFile } from '../types';
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
 
-const JS_TS_EXT = /\.(js|jsx|ts|tsx|mjs|cjs)$/i;
+const SOURCE_EXT = /\.(js|jsx|ts|tsx|mjs|cjs|py)$/i;
 
 /** Paths containing these segments are skipped entirely. */
 const SKIP_PATH_SEGMENTS = /node_modules|\.min\.|dist\/|build\/|coverage\/|__snapshots__|\.d\.ts$|\.lock$|-lock\.json$/;
@@ -44,7 +44,7 @@ async function pLimit<T, R>(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Fetches all JS/TS source files from a public GitHub repository.
+ * Fetches JS/TS/Python source files from a public GitHub repository.
  *
  * Strategy:
  *  1. One `GET /git/trees?recursive=1` call fetches the full file list.
@@ -64,10 +64,10 @@ export async function fetchRepoFiles(owner: string, repo: string): Promise<Parse
     );
   }
 
-  // Filter to JS/TS source blobs within the size limit
+  // Filter to source blobs within the size limit
   const candidates = tree.tree.filter((item) => {
     if (item.type !== 'blob') return false;
-    if (!JS_TS_EXT.test(item.path)) return false;
+    if (!SOURCE_EXT.test(item.path)) return false;
     if (SKIP_PATH_SEGMENTS.test(item.path)) return false;
     if ((item.size ?? 0) > config.analysis.maxFileSizeBytes) return false;
     return true;
@@ -76,7 +76,7 @@ export async function fetchRepoFiles(owner: string, repo: string): Promise<Parse
   const limited = candidates.slice(0, config.analysis.maxFiles);
 
   console.log(
-    `[fileFetcher] ${owner}/${repo}: ${candidates.length} JS/TS files found, ` +
+    `[fileFetcher] ${owner}/${repo}: ${candidates.length} source files found, ` +
       `fetching ${limited.length}`,
   );
 

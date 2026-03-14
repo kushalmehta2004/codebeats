@@ -247,7 +247,7 @@ export function computeDeadCodeRatio(allFiles: FileMetrics[]): number {
   for (const file of candidates) {
     // Strip path prefix and extension for matching  e.g. "src/utils/helpers.ts" → "helpers"
     const baseName = file.path
-      .replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, '')
+      .replace(/\.(ts|tsx|js|jsx|mjs|cjs|py)$/, '')
       .replace(/\/index$/, '')
       .split('/')
       .pop()!
