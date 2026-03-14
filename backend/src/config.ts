@@ -8,7 +8,13 @@ export const config = {
   github: {
     token: process.env.GITHUB_TOKEN || '',
     apiBase: 'https://api.github.com',
+    oauthClientId: process.env.GITHUB_OAUTH_CLIENT_ID || '',
+    oauthClientSecret: process.env.GITHUB_OAUTH_CLIENT_SECRET || '',
+    oauthRedirectUri:
+      process.env.GITHUB_OAUTH_REDIRECT_URI || 'http://localhost:3001/api/auth/github/callback',
   },
+
+  frontendBaseUrl: process.env.FRONTEND_BASE_URL || 'http://localhost:5173',
 
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
